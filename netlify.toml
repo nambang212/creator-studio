@@ -1,20 +1,14 @@
-# Konfigurasi ini memberitahu Netlify cara menangani request
-# untuk aplikasi berbasis JavaScript seperti React.
-
+# Konfigurasi dasar untuk build
 [build]
-  # Direktori tempat fungsi serverless Anda berada
   functions = "netlify/functions"
 
+# Menambahkan plugin untuk install dependensi functions secara otomatis
+[[plugins]]
+  package = "@netlify/plugin-functions-install-core"
+
+# Aturan redirect agar request ke /api/gemini diteruskan ke function kita
 [[redirects]]
-  # Arahkan semua request yang tidak cocok dengan file yang ada
-  # ke fungsi 'gemini' kita. Ini penting agar API call berfungsi.
-  from = "/.netlify/functions/*"
+  from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
 
-[[redirects]]
-  # Aturan ini untuk memastikan routing di sisi client berjalan benar.
-  # Semua path URL akan diarahkan ke index.html.
-  from = "/*"
-  to = "/index.html"
-  status = 200
