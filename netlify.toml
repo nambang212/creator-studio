@@ -1,9 +1,9 @@
 [build]
   functions = "netlify/functions"
 
-# Menambahkan blok ini untuk meningkatkan batas waktu
-[functions]
-  timeout = 26 # Waktu dalam detik (maksimal untuk sinkron)
+# Menggunakan sintaks wildcard yang benar untuk menerapkan pengaturan ke semua fungsi
+[functions."*"]
+  timeout = 26 # Waktu dalam detik
 
 [[plugins]]
   package = "@netlify/plugin-functions-install-core"
