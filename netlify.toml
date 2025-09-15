@@ -1,21 +1,20 @@
-[functions]
-  node_bundler = "esbuild"
-  [functions."*"]
-    timeout = 26 # Menambah batas waktu eksekusi fungsi menjadi 26 detik
+[build]
+  command = "echo 'Build command goes here'"
+  publish = "/"
 
-[build.processing]
-  skip_processing = false
-[build.processing.css]
-  bundle = true
-  minify = true
-[build.processing.js]
-  bundle = true
-  minify = true
-[build.processing.html]
-  pretty_urls = true
-[build.processing.images]
-  compress = true
+[functions]
+  directory = "netlify/functions/"
+  # Perpanjang batas waktu eksekusi fungsi menjadi 26 detik
+  # (batas maksimal untuk paket gratis)
+  timeout = 26 
 
 [[plugins]]
+  # Plugin ini akan secara otomatis meng-install dependensi 
+  # yang ada di package.json di dalam folder functions
   package = "@netlify/plugin-functions-install-core"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
 
