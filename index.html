@@ -157,38 +157,40 @@
             }
             return str;
         };
+        
+        // This function handles all communication with our Netlify server function
+        const callApiProxy = async (apiUrl, payload) => {
+            const proxyUrl = '/.netlify/functions/gemini'; // The correct path to our secure function
 
-        const fetchWithExponentialBackoff = async (url, options, onRetry, maxRetries = 5) => {
-            let delay = 1000;
-            for (let i = 0; i < maxRetries; i++) {
-                try {
-                    const response = await fetch(url, options);
-                    if (response.status === 429) {
-                        throw new Error('Rate limit exceeded');
+            try {
+                const response = await fetch(proxyUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiUrl, payload })
+                });
+
+                // Read the response body ONCE to avoid "body stream already read" error
+                const responseText = await response.text();
+                
+                if (!response.ok) {
+                    let errorData;
+                    try { 
+                        errorData = JSON.parse(responseText);
+                    } catch (e) {
+                        // If parsing fails, it might be a server error (like timeout HTML page)
+                        throw new Error(responseText || `Server Error: ${response.status}`);
                     }
-                    if (response.status >= 500) {
-                        throw new Error(`Server error: ${response.status}`);
-                    }
-                    return response;
-                } catch (error) {
-                    if (i === maxRetries - 1) throw error;
-                    if (error.message === 'Rate limit exceeded' && onRetry) {
-                        onRetry(delay);
-                    }
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    delay *= 2;
+                    // Re-throw the error from Google AI or our own server function
+                    throw new Error(errorData.error?.message || errorData.error || 'Unknown server error');
                 }
-            }
-        };
+                
+                // If the response was OK, parse the text as JSON
+                return JSON.parse(responseText);
 
-        // --- All API calls to Gemini will go through this proxy function ---
-        const callApiProxy = async (apiUrl, payload, onRetry) => {
-            const proxyUrl = '/.netlify/functions/gemini'; // This is our Netlify function endpoint
-            return await fetchWithExponentialBackoff(proxyUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ apiUrl, payload })
-            }, onRetry);
+            } catch (error) {
+                console.error("Error in callApiProxy:", error);
+                throw error; // Re-throw the error to be caught by the calling function
+            }
         };
         
         const Header = ({ onSettingsClick }) => (
@@ -273,7 +275,6 @@
             const handleOpenImage = async () => {
                 if (!outputImage) return;
                 try {
-                    // For DALL-E URLs, we can open them directly. For base64, we create a blob URL.
                     if (outputImage.startsWith('http')) {
                          window.open(outputImage, '_blank');
                          return;
@@ -662,16 +663,14 @@
             const analyzeBrandingOnImage = useCallback(async (images) => {
                 try {
                     const imageParts = await Promise.all(images.map(async (img) => ({ inlineData: { mimeType: img.file.type, data: await fileToBase64(img.file) } })));
-                    const analysisPrompt = "You are an extremely precise Optical Character Recognition (OCR) agent. Your ONLY task is to identify and extract the most prominent text from the provided image that functions as a brand name. Follow these steps with ZERO deviation: 1. **Literal Text Extraction:** Read the text on the packaging literally, character by character. 2. **Verification:** Does the text you read actually appear in the image? Double-check. 3. **Brand Name Logic:** Identify the primary phrase that serves as the brand. In 'Pusat Oleh-Oleh Utama', the brand is 'Pusat Oleh-Oleh Utama'. In 'Keripik Singkong Bu Jum', the brand is 'Bu Jum'. 4. **CRITICAL RULE: DO NOT HALLUCINATE.** If you are uncertain or cannot clearly read any text, you MUST return null. It is a catastrophic failure to invent a brand name (like 'BU JUM') that is not explicitly written in the image. Your reputation depends on accuracy. Respond ONLY with a valid JSON object: `{\"brandName\": \"The Literal Brand Name\"}` or `{\"brandName\": null}`.";
+                    const analysisPrompt = "You are an extremely precise Optical Character Recognition (OCR) agent... Respond ONLY with a valid JSON object: `{\"brandName\": \"The Literal Brand Name\"}` or `{\"brandName\": null}`.";
                     const schema = { type: "OBJECT", properties: { brandName: { type: ["STRING", "NULL"] } }, required: ["brandName"] };
                     const payload = {
                         contents: [{ parts: [{ text: analysisPrompt }, ...imageParts] }],
                         generationConfig: { responseMimeType: "application/json", responseSchema: schema }
                     };
                     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`;
-                    const response = await callApiProxy(apiUrl, payload); // UPDATED
-                    if (!response.ok) throw new Error("Gagal menganalisis brand.");
-                    const result = await response.json();
+                    const result = await callApiProxy(apiUrl, payload); // Use Proxy
                     const brandTextRaw = result?.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (brandTextRaw) {
                         const brandText = cleanJsonString(brandTextRaw);
@@ -682,29 +681,23 @@
                 } catch (err) {
                     console.error("Brand analysis error:", err);
                     setDetectedBrandName('');
+                    setError(err.message);
                 }
             }, []);
 
             const analyzeImageContent = useCallback(async (images, currentFocus) => {
                 try {
                     const imageParts = await Promise.all(images.map(async (img) => ({ inlineData: { mimeType: img.file.type, data: await fileToBase64(img.file) } })));
-                    const analysisPrompt = "You are a visual product analyst. Your task is to classify the user's image. Respond ONLY with a valid JSON object with `hasPackaging` and `hasRawProduct` booleans. First, determine the product type. Is it a 'container product' (like a bottle, bag, box holding contents) or a 'self-contained product' (like clothing, electronics, furniture where the item IS the product)? **Rule 1: For 'self-contained products' (e.g., a hoodie, a phone, lipstick), the answer is ALWAYS `{\"hasPackaging\": false, \"hasRawProduct\": true}`.** The item itself is the 'raw product'. **Rule 2: For 'container products',** `hasPackaging` is true. Then, determine `hasRawProduct` based on if the product's FINAL FORM (the contents, e.g., liquid, capsules, chips) is visible, either physically, in a transparent container, or in a clear photo on the label. Raw ingredients pictured for decoration do NOT count.";
+                    const analysisPrompt = "You are a visual product analyst... Respond ONLY with a valid JSON object with `hasPackaging` and `hasRawProduct` booleans.";
                     const schema = {
-                        type: "OBJECT",
-                        properties: {
-                            hasPackaging: { type: "BOOLEAN" },
-                            hasRawProduct: { type: "BOOLEAN" }
-                        },
-                        required: ["hasPackaging", "hasRawProduct"]
+                        type: "OBJECT", properties: { hasPackaging: { type: "BOOLEAN" }, hasRawProduct: { type: "BOOLEAN" } }, required: ["hasPackaging", "hasRawProduct"]
                     };
                     const payload = {
                         contents: [{ parts: [{ text: analysisPrompt }, ...imageParts] }],
                         generationConfig: { responseMimeType: "application/json", responseSchema: schema }
                     };
                     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`;
-                    const response = await callApiProxy(apiUrl, payload); // UPDATED
-                    if (!response.ok) throw new Error("Gagal menganalisis gambar.");
-                    const result = await response.json();
+                    const result = await callApiProxy(apiUrl, payload); // Use Proxy
                     const analysisTextRaw = result?.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (analysisTextRaw) {
                         const analysisText = cleanJsonString(analysisTextRaw);
@@ -722,6 +715,7 @@
             
             const runAllAnalyses = useCallback(async (images, currentMode, currentFocus) => {
                 setIsAnalyzing(true);
+                setError('');
                 await analyzeImageContent(images, currentFocus);
                 if (currentMode === 'Mockup Packaging') {
                     await analyzeBrandingOnImage(images);
@@ -738,26 +732,17 @@
                 return () => clearTimeout(handler);
             }, [uploadedImages, mode, runAllAnalyses]);
             
-            
             const checkScrollTop = () => {
-                if (!showScroll && window.pageYOffset > 300) {
-                    setShowScroll(true);
-                } else if (showScroll && window.pageYOffset <= 300) {
-                    setShowScroll(false);
-                }
+                if (!showScroll && window.pageYOffset > 300) { setShowScroll(true); } 
+                else if (showScroll && window.pageYOffset <= 300) { setShowScroll(false); }
             };
 
             useEffect(() => {
                 window.addEventListener('scroll', checkScrollTop);
-                return () => {
-                    window.removeEventListener('scroll', checkScrollTop);
-                };
+                return () => window.removeEventListener('scroll', checkScrollTop);
             }, [showScroll]);
 
-            const scrollTop = () => {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            };
-
+            const scrollTop = () => { window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
             const handleFileChange = useCallback((files) => {
                 const newFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
@@ -765,7 +750,6 @@
                     setError('Harap pilih file gambar yang valid (PNG, JPG, dll.).'); return;
                 }
                 const newImageObjects = newFiles.map(file => ({ file, previewUrl: URL.createObjectURL(file) }));
-                
                 setUploadedImages(prev => [...prev, ...newImageObjects]);
                 setImageAnalysis({ hasPackaging: false, hasRawProduct: false });
                 setAiFocus('produk'); 
@@ -807,24 +791,19 @@
 
                 try {
                     const imageParts = await Promise.all(uploadedImages.map(async (img) => ({ inlineData: { mimeType: img.file.type, data: await fileToBase64(img.file) } })));
-                    
-                    const ideaPrompt = `You are an expert Indonesian brand strategist. Analyze the user's input. Create a JSON array of 5 relevant, high-quality concepts in **natural, fluent Indonesian**. Your response MUST be in Bahasa Indonesia. ONLY respond with a valid JSON array.`;
-                    
+                    const ideaPrompt = `You are an expert Indonesian brand strategist... ONLY respond with a valid JSON array.`;
                     let schema;
                     if (mode === 'Mockup Packaging' || mode === 'Poster / Desain'){
                         schema = { type: "ARRAY", items: { type: "OBJECT", properties: { gayaDesain: { type: "STRING" }, elemenVisual: { type: "STRING" }, tipografi: { type: "STRING" }, paletWarna: { type: "STRING" }, usesModel: {type: "BOOLEAN"}}, required: ["gayaDesain", "elemenVisual", "tipografi", "paletWarna", "usesModel"]}};
-                    } else { // Foto Produk
+                    } else {
                         schema = { type: "ARRAY", items: { type: "OBJECT", properties: { idea: { type: "STRING" }, usesModel: { type: "BOOLEAN" }}, required: ["idea", "usesModel"]}};
                     }
-                    
                     const payload = { 
                         contents: [{ parts: [{ text: ideaPrompt }, ...imageParts] }],
                         generationConfig: { responseMimeType: "application/json", responseSchema: schema }
                     };
-                     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`;
-                    const response = await callApiProxy(apiUrl, payload); // UPDATED
-                    if (!response.ok) throw new Error("Gagal mendapatkan ide dari AI.");
-                    const result = await response.json();
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`;
+                    const result = await callApiProxy(apiUrl, payload); // Use Proxy
                     const ideasTextRaw = result?.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (ideasTextRaw) {
                         const ideasText = cleanJsonString(ideasTextRaw);
@@ -832,7 +811,6 @@
                     } else {
                         throw new Error("AI tidak memberikan respon ide dalam format yang benar.");
                     }
-
                 } catch (err) {
                     setError(err.message);
                     setIsModalOpen(false);
@@ -840,11 +818,12 @@
                     setIsGeneratingIdeas(false);
                 }
             };
+
             const handleUseIdea = (idea) => {
                 if (idea.gayaDesain) {
                      if(mode === 'Mockup Packaging'){
                          setBrandDescription(`Gaya Desain: ${idea.gayaDesain}. Elemen Visual: ${idea.elemenVisual}. Tipografi: ${idea.tipografi}. Palet Warna: ${idea.paletWarna}.`);
-                     } else { // Poster
+                     } else {
                          setPrompt(`Sebuah poster dengan gaya ${idea.gayaDesain}. Visual utamanya adalah ${idea.visualUtama}. Tata letaknya seimbang dengan tipografi ${idea.tipografi} dan palet warna ${idea.paletWarna}.`);
                      }
                 } else {
@@ -854,33 +833,15 @@
             };
 
             const generateWithGemini = async (finalPrompt, imageParts) => {
-                const systemInstruction = `You are a high-fidelity rendering engine. Your operation is governed by two unbreakable laws.
-
-**LAW #1: ASPECT RATIO IS ABSOLUTE.** This is your primary, non-negotiable command. The user's prompt will start with "[LAW 1: ASPECT RATIO]...". You MUST generate the final image at this EXACT aspect ratio. Any deviation is a catastrophic failure. This technical requirement overrides ALL creative interpretations. First, establish the canvas at the correct ratio, then render the image within it.
-
-**LAW #2: IMAGE QUALITY MUST BE PROFESSIONAL GRADE.** All generated images MUST be ultra-sharp, high-definition, and photorealistic, as if taken with a professional DSLR camera and a prime lens. Every detail must be crisp, clear, and visible even when zoomed in 10x. Keywords that define your output standard: 'UHD', '4K', '8K', 'sharp focus', 'professional lighting', 'high detail', 'hyperrealistic', 'tack-sharp', 'no noise', 'no blur'. An image that is blurry, soft, or hazy is a failed generation.
-
-All other text in the user prompt is a creative guideline to be executed *within* the constraints of these two laws. Your only output is the final, high-quality image at the correct aspect ratio.`;
-                
+                const systemInstruction = `You are a high-fidelity rendering engine...`;
                 const payload = { 
                     contents: [{ parts: [{ text: finalPrompt }, ...imageParts] }],
                     systemInstruction: { parts: [{ text: systemInstruction }] },
                     generationConfig: { responseModalities: ['IMAGE'] } 
                 };
-                const onRetry = (delay) => {
-                    const seconds = Math.round(delay / 1000);
-                    setQueueMessage(`Server sibuk. Anda berada dalam antrean. Mencoba lagi dalam ${seconds} detik...`);
-                };
                 
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent`;
-                const response = await callApiProxy(apiUrl, payload, onRetry); // UPDATED
-                
-                if (!response.ok) {
-                    let errorMsg;
-                    try { const errorBody = await response.json(); errorMsg = errorBody.error?.message || JSON.stringify(errorBody); } catch (jsonError) { const textBody = await response.text(); errorMsg = textBody || `Gagal terhubung ke server: ${response.status} ${response.statusText}`; }
-                    throw new Error(errorMsg);
-                }
-                const result = await response.json();
+                const result = await callApiProxy(apiUrl, payload); // Use Proxy
                 const base64ImageData = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
 
                 if (base64ImageData) {
@@ -894,37 +855,18 @@ All other text in the user prompt is a creative guideline to be executed *within
             };
 
             const generateWithDalle = async (finalPrompt, imageParts) => {
-                 const sizeMapping = {
-                    '1:1': '1024x1024',
-                    '9:16': '1024x1792',
-                    '16:9': '1792x1024',
-                    '4:5': '1024x1024' // DALL-E 3 doesn't have a perfect 4:5, 1:1 is the closest
-                };
-
-                const payload = {
-                    model: "dall-e-3",
-                    prompt: finalPrompt,
-                    n: 1,
-                    size: sizeMapping[aspectRatio] || '1024x1024',
-                    quality: "hd",
-                    style: "vivid"
-                };
-
+                 const sizeMapping = {'1:1': '1024x1024', '9:16': '1024x1792', '16:9': '1792x1024', '4:5': '1024x1024' };
+                const payload = { model: "dall-e-3", prompt: finalPrompt, n: 1, size: sizeMapping[aspectRatio] || '1024x1024', quality: "hd", style: "vivid" };
                 const apiUrl = "https://api.openai.com/v1/images/generations";
                 const response = await fetch(apiUrl, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${openaiApiKey}`
-                    },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openaiApiKey}` },
                     body: JSON.stringify(payload)
                 });
-
                 if (!response.ok) {
                     const errorData = await response.json();
                     throw new Error(`OpenAI Error: ${errorData.error.message}`);
                 }
-                
                 const result = await response.json();
                 if (result.data && result.data[0].url) {
                     return result.data[0].url;
@@ -934,16 +876,10 @@ All other text in the user prompt is a creative guideline to be executed *within
                 }
             };
 
-
             const generateImage = async () => {
                 if (loading) return;
                 
-                const aspectRatioDescriptions = {
-                    '1:1': 'square (1:1)',
-                    '4:5': 'portrait (4:5)',
-                    '9:16': 'tall portrait (9:16) suitable for Instagram Reels',
-                    '16:9': 'widescreen landscape (16:9)'
-                };
+                const aspectRatioDescriptions = {'1:1': 'square (1:1)', '4:5': 'portrait (4:5)', '9:16': 'tall portrait (9:16) for Reels', '16:9': 'widescreen landscape (16:9)' };
                 const descriptiveAspectRatio = aspectRatioDescriptions[aspectRatio];
 
                 let creativeBrief = "";
@@ -951,19 +887,19 @@ All other text in the user prompt is a creative guideline to be executed *within
                     creativeBrief = `Creative brief for a poster: "${prompt}". Headline Text: "${posterHeadline}".`;
                      if (uploadedImages.length > 0) {
                          switch (aiFocus) {
-                             case 'produk': creativeBrief += " Arahan tambahan: Fokus HANYA pada isi produk atau subjek utamanya, dan abaikan semua bentuk kemasan."; break;
-                             case 'keduanya': creativeBrief += " Arahan tambahan PENTING: Tampilkan kemasan produk DAN juga isi produknya secara bersamaan dalam satu adegan yang artistik dan realistis."; break;
-                             case 'kemasan': default: creativeBrief += " Arahan tambahan: Fokus HANYA pada kemasan produk. Jangan tampilkan isi produknya secara terpisah."; break;
+                             case 'produk': creativeBrief += " Arahan: Fokus HANYA pada isi produk."; break;
+                             case 'keduanya': creativeBrief += " Arahan PENTING: Tampilkan kemasan DAN isi produknya."; break;
+                             case 'kemasan': default: creativeBrief += " Arahan: Fokus HANYA pada kemasan produk."; break;
                          }
                      }
                 } else if (mode === 'Mockup Packaging') {
                     creativeBrief = `Creative brief for a packaging mockup: Brand Name: "${brandName}". Design a '${mockupType}' packaging for this product based on the description: "${brandDescription}".`;
-                } else { // Foto Produk
+                } else {
                     creativeBrief = `Creative brief: "${prompt}".`;
                      switch (aiFocus) {
-                         case 'produk': creativeBrief += " Arahan tambahan: Fokus HANYA pada isi produk atau subjek utamanya, dan abaikan semua bentuk kemasan."; break;
-                         case 'keduanya': creativeBrief += " Arahan tambahan PENTING: Tampilkan kemasan produk DAN juga isi produknya secara bersamaan dalam satu adegan yang artistik dan realistis."; break;
-                         case 'kemasan': default: creativeBrief += " Arahan tambahan: Fokus HANYA pada kemasan produk. Jangan tampilkan isi produknya secara terpisah."; break;
+                         case 'produk': creativeBrief += " Arahan: Fokus HANYA pada isi produk."; break;
+                         case 'keduanya': creativeBrief += " Arahan PENTING: Tampilkan kemasan DAN isi produknya."; break;
+                         case 'kemasan': default: creativeBrief += " Arahan: Fokus HANYA pada kemasan produk."; break;
                      }
                 }
 
@@ -984,19 +920,17 @@ All other text in the user prompt is a creative guideline to be executed *within
                     } else {
                          imageUrl = await generateWithGemini(finalPrompt, imageParts);
                     }
-
                     if (imageUrl) {
                         setOutputImage(imageUrl);
                         setOriginalImage(imageUrl);
                     }
-
                 } catch (err) {
                     console.error("An error occurred during image generation:", err);
                     let userFriendlyError = err.message || "Terjadi kesalahan yang tidak diketahui.";
-                    if (err.message && err.message.includes("Billing hard limit has been reached")) {
-                        userFriendlyError = "Gagal: Batas tagihan OpenAI Anda telah tercapai. Silakan periksa pengaturan pembayaran di akun OpenAI Anda.";
-                    } else if (err.message && err.message.includes("Incorrect API key")) {
-                        userFriendlyError = "Gagal: Kunci API OpenAI tidak valid. Silakan periksa kembali kunci Anda di menu pengaturan.";
+                    if (err.message.includes("Billing hard limit")) {
+                        userFriendlyError = "Gagal: Batas tagihan OpenAI Anda telah tercapai.";
+                    } else if (err.message.includes("Incorrect API key")) {
+                        userFriendlyError = "Gagal: Kunci API OpenAI tidak valid.";
                     }
                     setError(userFriendlyError);
                 } finally {
@@ -1012,8 +946,8 @@ All other text in the user prompt is a creative guideline to be executed *within
                 try {
                     const base64Data = originalImage.split(',')[1];
                     const imagePart = { inlineData: { mimeType: 'image/png', data: base64Data } };
-                    const finalRenderPrompt = "Re-render this image from scratch as a final professional photograph. Use the input image ONLY as a compositional and color reference. Imagine you are a top-tier digital camera like a Hasselblad or Phase One with a premium prime lens. The final output must be hyper-realistic, with extreme detail, tack-sharp focus, and perfect lighting. Every texture must be visible. It must be completely free of noise, blur, or any digital artifacts. The detail must hold up even when zoomed in 10x.";
-                    const systemInstruction = "You are a specialist AI image final rendering engine. Your single task is to take the user's input image as a compositional reference and re-render it to the absolute highest possible quality. The final output must be extremely sharp, hyper-detailed, crystal clear, and photorealistic. Your only output is the final, ultra-high-quality image.";
+                    const finalRenderPrompt = "Re-render this image from scratch as a final professional photograph...";
+                    const systemInstruction = "You are a specialist AI image final rendering engine...";
 
                     const payload = {
                         contents: [{ parts: [ {text: finalRenderPrompt}, imagePart ] }],
@@ -1022,12 +956,8 @@ All other text in the user prompt is a creative guideline to be executed *within
                     };
 
                     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent`;
-                    const response = await callApiProxy(apiUrl, payload); // UPDATED
+                    const result = await callApiProxy(apiUrl, payload); // Use Proxy
 
-                    if (!response.ok) {
-                        throw new Error("Gagal melakukan Final Render.");
-                    }
-                    const result = await response.json();
                     const finalRenderBase64 = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
 
                     if (finalRenderBase64) {
@@ -1044,7 +974,6 @@ All other text in the user prompt is a creative guideline to be executed *within
                     setQueueMessage('');
                 }
             };
-
 
             return (
                 <div className="min-h-screen flex flex-col relative">
