@@ -157,37 +157,7 @@
             }
             return str;
         };
-        
-        const callApiProxy = async (apiUrl, payload) => {
-            const proxyUrl = '/.netlify/functions/gemini';
 
-            try {
-                const response = await fetch(proxyUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ apiUrl, payload })
-                });
-
-                const responseText = await response.text();
-                
-                if (!response.ok) {
-                    let errorData;
-                    try { 
-                        errorData = JSON.parse(responseText);
-                    } catch (e) {
-                        throw new Error(responseText || `Server Error: ${response.status}`);
-                    }
-                    throw new Error(errorData.error?.message || errorData.error || 'Unknown server error');
-                }
-                
-                return JSON.parse(responseText);
-
-            } catch (error) {
-                console.error("Error in callApiProxy:", error);
-                throw error;
-            }
-        };
-        
         const Header = ({ onSettingsClick }) => (
             <header className="relative text-center py-8 px-4">
                 <div className="absolute top-4 right-4">
@@ -201,7 +171,7 @@
             </header>
         );
         
-        const SettingsPopover = ({ isOpen, onClose, engine, setEngine, apiKey, setApiKey }) => {
+        const SettingsPopover = ({ isOpen, onClose, engine, setEngine, openaiApiKey, setOpenaiApiKey, geminiApiKey, setGeminiApiKey }) => {
             const popoverRef = useRef(null);
             
             useEffect(() => {
@@ -226,13 +196,27 @@
                                  <button onClick={() => setEngine('dalle')} data-state={engine === 'dalle' ? 'active' : ''} className="engine-btn p-2 bg-slate-800 border-2 border-slate-700 rounded-lg font-medium text-xs">DALL-E 3 (HD)</button>
                             </div>
                         </div>
+                        
+                        {/* Gemini API Key Input */}
+                        <div>
+                             <h3 className="font-semibold mb-2 text-slate-200 text-sm">Kunci API Google Gemini</h3>
+                             <input 
+                                 type="password"
+                                 value={geminiApiKey}
+                                 onChange={(e) => setGeminiApiKey(e.target.value)}
+                                 placeholder="Masukkan kunci API Anda..."
+                                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm"
+                             />
+                             <p className="text-xs text-slate-500 mt-1">Gunakan kunci Anda sendiri untuk kuota lebih tinggi. Disimpan di browser.</p>
+                         </div>
+
                         {engine === 'dalle' && (
                              <div>
                                  <h3 className="font-semibold mb-2 text-slate-200 text-sm">Kunci API OpenAI</h3>
                                  <input 
                                      type="password"
-                                     value={apiKey}
-                                     onChange={(e) => setApiKey(e.target.value)}
+                                     value={openaiApiKey}
+                                     onChange={(e) => setOpenaiApiKey(e.target.value)}
                                      placeholder="sk-..."
                                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm"
                                  />
@@ -395,12 +379,12 @@
             );
         };
 
-        const ControlPanel = ({ mode, setMode, uploadedImages, handleFileChange, removeImage, prompt, setPrompt, aspectRatio, setAspectRatio, onGenerate, isLoading, onGenerateIdeas, isGeneratingIdeas, handleSuggestionClick, aiFocus, setAiFocus, imageAnalysis, isAnalyzing, posterHeadline, setPosterHeadline, mockupType, setMockupType, brandName, setBrandName, brandDescription, setBrandDescription, detectedBrandName, engine, openaiApiKey, cooldown }) => {
+        const ControlPanel = ({ mode, setMode, uploadedImages, handleFileChange, removeImage, prompt, setPrompt, aspectRatio, setAspectRatio, onGenerate, isLoading, onGenerateIdeas, isGeneratingIdeas, handleSuggestionClick, aiFocus, setAiFocus, imageAnalysis, isAnalyzing, posterHeadline, setPosterHeadline, mockupType, setMockupType, brandName, setBrandName, brandDescription, setBrandDescription, detectedBrandName, engine, openaiApiKey }) => {
             const onDrop = useCallback(e => { e.preventDefault(); e.stopPropagation(); if (e.dataTransfer.files) handleFileChange(e.dataTransfer.files); }, [handleFileChange]);
             const onDragOver = useCallback(e => { e.preventDefault(); e.stopPropagation(); }, []);
             
             const getIsButtonDisabled = () => {
-                if (isLoading || cooldown > 0) return true;
+                if (isLoading) return true;
                 if (engine === 'dalle' && !openaiApiKey) return true;
                 switch (mode) {
                     case 'Foto Produk':
@@ -485,7 +469,7 @@
                                 </div>
                                 <div className="pt-4">
                                     <button onClick={onGenerate} disabled={isButtonDisabled} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg px-8 py-4 rounded-lg shadow-lg hover:scale-105 transform transition-transform duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 disabled:shadow-none hover:shadow-indigo-500/50">
-                                        {isLoading ? 'MEMPROSES...' : (cooldown > 0 ? `Tunggu ${cooldown} detik...` : '✨ Wujudkan Sekarang')}
+                                        {isLoading ? 'MEMPROSES...' : '✨ Wujudkan Sekarang'}
                                     </button>
                                 </div>
                             </>
@@ -546,9 +530,7 @@
                                      </div>
                                  </div>
                                 <div className="pt-4">
-                                    <button onClick={onGenerate} disabled={isButtonDisabled} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg px-8 py-4 rounded-lg">
-                                        {isLoading ? 'MEMPROSES...' : (cooldown > 0 ? `Tunggu ${cooldown} detik...` : '✨ Wujudkan Sekarang')}
-                                    </button>
+                                    <button onClick={onGenerate} disabled={isButtonDisabled} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg px-8 py-4 rounded-lg">✨ Wujudkan Sekarang</button>
                                 </div>
                             </div>
                         )}
@@ -613,9 +595,7 @@
                                      </div>
                                  </div>
                                 <div className="pt-4">
-                                     <button onClick={onGenerate} disabled={isButtonDisabled} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg px-8 py-4 rounded-lg shadow-lg hover:scale-105 transform transition-transform duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 disabled:shadow-none hover:shadow-indigo-500/50">
-                                        {isLoading ? 'MEMPROSES...' : (cooldown > 0 ? `Tunggu ${cooldown} detik...` : '✨ Wujudkan Sekarang')}
-                                     </button>
+                                     <button onClick={onGenerate} disabled={isButtonDisabled} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg px-8 py-4 rounded-lg shadow-lg hover:scale-105 transform transition-transform duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 disabled:shadow-none hover:shadow-indigo-500/50">✨ Wujudkan Sekarang</button>
                                 </div>
                             </div>
                         )}
@@ -648,36 +628,57 @@
             const [showScroll, setShowScroll] = useState(false);
             const [queueMessage, setQueueMessage] = useState('');
             const [engine, setEngine] = useState('gemini');
-            const [openaiApiKey, setOpenaiApiKey] = useState("");
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-            const [cooldown, setCooldown] = useState(0);
-
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [generatedIdeas, setGeneratedIdeas] = useState([]);
             
+            // NEW STATE for User's API Keys
+            const [openaiApiKey, setOpenaiApiKey] = useState(() => localStorage.getItem('openaiApiKey') || "");
+            const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('geminiApiKey') || "");
+
+            // Save keys to localStorage whenever they change
+            useEffect(() => { localStorage.setItem('openaiApiKey', openaiApiKey); }, [openaiApiKey]);
+            useEffect(() => { localStorage.setItem('geminiApiKey', geminiApiKey); }, [geminiApiKey]);
+
             const aiFocusRef = useRef(aiFocus);
             useEffect(() => {
                 aiFocusRef.current = aiFocus;
             }, [aiFocus]);
-            
-            useEffect(() => {
-                if (cooldown > 0) {
-                    const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
-                    return () => clearTimeout(timer);
+
+            const callApi = useCallback(async (apiUrl, payload) => {
+                if (engine === 'gemini' && geminiApiKey) {
+                    const response = await fetch(`${apiUrl}?key=${geminiApiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.error?.message || 'Error with user-provided API Key.');
+                    return result;
+                } else if (engine === 'gemini') {
+                    const proxyUrl = '/.netlify/functions/gemini';
+                    const response = await fetch(proxyUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ apiUrl, payload })
+                    });
+                     const result = await response.json();
+                    if (!response.ok) throw new Error(result.error?.message || result.error || 'Server error or quota reached on free tier.');
+                    return result;
                 }
-            }, [cooldown]);
+            }, [geminiApiKey, engine]);
 
             const analyzeBrandingOnImage = useCallback(async (images) => {
                 try {
                     const imageParts = await Promise.all(images.map(async (img) => ({ inlineData: { mimeType: img.file.type, data: await fileToBase64(img.file) } })));
-                    const analysisPrompt = "You are an extremely precise Optical Character Recognition (OCR) agent... Respond ONLY with a valid JSON object: `{\"brandName\": \"The Literal Brand Name\"}` or `{\"brandName\": null}`.";
+                    const analysisPrompt = "You are an extremely precise Optical Character Recognition (OCR) agent...";
                     const schema = { type: "OBJECT", properties: { brandName: { type: ["STRING", "NULL"] } }, required: ["brandName"] };
                     const payload = {
                         contents: [{ parts: [{ text: analysisPrompt }, ...imageParts] }],
                         generationConfig: { responseMimeType: "application/json", responseSchema: schema }
                     };
                     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`;
-                    const result = await callApiProxy(apiUrl, payload);
+                    const result = await callApi(apiUrl, payload);
                     const brandTextRaw = result?.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (brandTextRaw) {
                         const brandText = cleanJsonString(brandTextRaw);
@@ -690,12 +691,12 @@
                     setDetectedBrandName('');
                     setError(err.message);
                 }
-            }, []);
+            }, [callApi]);
 
             const analyzeImageContent = useCallback(async (images, currentFocus) => {
                 try {
                     const imageParts = await Promise.all(images.map(async (img) => ({ inlineData: { mimeType: img.file.type, data: await fileToBase64(img.file) } })));
-                    const analysisPrompt = "You are a visual product analyst... Respond ONLY with a valid JSON object with `hasPackaging` and `hasRawProduct` booleans.";
+                    const analysisPrompt = "You are a visual product analyst...";
                     const schema = {
                         type: "OBJECT", properties: { hasPackaging: { type: "BOOLEAN" }, hasRawProduct: { type: "BOOLEAN" } }, required: ["hasPackaging", "hasRawProduct"]
                     };
@@ -704,7 +705,7 @@
                         generationConfig: { responseMimeType: "application/json", responseSchema: schema }
                     };
                     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`;
-                    const result = await callApiProxy(apiUrl, payload);
+                    const result = await callApi(apiUrl, payload);
                     const analysisTextRaw = result?.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (analysisTextRaw) {
                         const analysisText = cleanJsonString(analysisTextRaw);
@@ -718,7 +719,7 @@
                     setError("Gagal menganalisis gambar aset. Menggunakan setelan default.");
                     setImageAnalysis({ hasPackaging: true, hasRawProduct: true });
                 }
-            }, [setAiFocus]);
+            }, [setAiFocus, callApi]);
             
             const runAllAnalyses = useCallback(async (images, currentMode, currentFocus) => {
                 setIsAnalyzing(true);
@@ -810,7 +811,7 @@
                         generationConfig: { responseMimeType: "application/json", responseSchema: schema }
                     };
                     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`;
-                    const result = await callApiProxy(apiUrl, payload);
+                    const result = await callApi(apiUrl, payload);
                     const ideasTextRaw = result?.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (ideasTextRaw) {
                         const ideasText = cleanJsonString(ideasTextRaw);
@@ -848,20 +849,20 @@
                 };
                 
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent`;
-                const result = await callApiProxy(apiUrl, payload);
+                const result = await callApi(apiUrl, payload); 
+                
                 const base64ImageData = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
 
                 if (base64ImageData) {
                     return `data:image/png;base64,${base64ImageData}`;
                 } else {
-                    console.error("Gemini response did not contain image data:", result);
                     const textResponse = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-                    const finalError = textResponse ? `AI gagal membuat gambar dan merespon dengan teks: "${textResponse}"` : "AI tidak memberikan gambar. Ini bisa terjadi karena filter keamanan atau prompt yang tidak sesuai.";
+                    const finalError = textResponse ? `AI gagal membuat gambar: "${textResponse}"` : "AI tidak memberikan gambar karena filter keamanan atau prompt tidak sesuai.";
                     throw new Error(finalError);
                 }
             };
 
-            const generateWithDalle = async (finalPrompt, imageParts) => {
+            const generateWithDalle = async (finalPrompt) => {
                  const sizeMapping = {'1:1': '1024x1024', '9:16': '1024x1792', '16:9': '1792x1024', '4:5': '1024x1024' };
                 const payload = { model: "dall-e-3", prompt: finalPrompt, n: 1, size: sizeMapping[aspectRatio] || '1024x1024', quality: "hd", style: "vivid" };
                 const apiUrl = "https://api.openai.com/v1/images/generations";
@@ -884,7 +885,7 @@
             };
 
             const generateImage = async () => {
-                if (loading || cooldown > 0) return;
+                if (loading) return;
                 
                 const aspectRatioDescriptions = {'1:1': 'square (1:1)', '4:5': 'portrait (4:5)', '9:16': 'tall portrait (9:16) for Reels', '16:9': 'widescreen landscape (16:9)' };
                 const descriptiveAspectRatio = aspectRatioDescriptions[aspectRatio];
@@ -923,10 +924,9 @@
                     const imageParts = await Promise.all(uploadedImages.map(async (img) => ({ inlineData: { mimeType: img.file.type, data: await fileToBase64(img.file) } })));
                     let imageUrl;
                     if (engine === 'dalle') {
-                         imageUrl = await generateWithDalle(finalPrompt, imageParts);
+                         imageUrl = await generateWithDalle(finalPrompt);
                     } else {
                          imageUrl = await generateWithGemini(finalPrompt, imageParts);
-                         setCooldown(60); // Start 60 second cooldown after a Gemini request
                     }
                     if (imageUrl) {
                         setOutputImage(imageUrl);
@@ -936,12 +936,12 @@
                     console.error("An error occurred during image generation:", err);
                     let userFriendlyError = err.message || "Terjadi kesalahan yang tidak diketahui.";
                     if (userFriendlyError.toLowerCase().includes('quota') || userFriendlyError.toLowerCase().includes('rate limit')) {
-                       userFriendlyError = "Batas penggunaan tercapai. Coba lagi nanti atau gunakan model DALL-E 3.";
+                       userFriendlyError = "Batas penggunaan tercapai. Coba lagi nanti atau gunakan model lain.";
                     }
                     else if (err.message.includes("Billing hard limit")) {
                         userFriendlyError = "Gagal: Batas tagihan OpenAI Anda telah tercapai.";
                     } else if (err.message.includes("Incorrect API key")) {
-                        userFriendlyError = "Gagal: Kunci API OpenAI tidak valid.";
+                        userFriendlyError = "Gagal: Kunci API tidak valid.";
                     }
                     setError(userFriendlyError);
                 } finally {
@@ -967,7 +967,7 @@
                     };
 
                     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent`;
-                    const result = await callApiProxy(apiUrl, payload);
+                    const result = await callApi(apiUrl, payload);
 
                     const finalRenderBase64 = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
 
@@ -995,14 +995,16 @@
                            onClose={() => setIsSettingsOpen(false)}
                            engine={engine}
                            setEngine={setEngine}
-                           apiKey={openaiApiKey}
-                           setApiKey={setOpenaiApiKey}
+                           openaiApiKey={openaiApiKey}
+                           setOpenaiApiKey={setOpenaiApiKey}
+                           geminiApiKey={geminiApiKey}
+                           setGeminiApiKey={setGeminiApiKey}
                        />
                     </div>
                     <main className="flex-grow container mx-auto p-4 md:p-8 flex flex-col lg:flex-row items-start gap-8">
                         <div className="w-full lg:w-[450px] flex-shrink-0 lg:sticky lg:top-8">
                             <ControlPanel 
-                                {...{ mode, setMode, uploadedImages, handleFileChange, removeImage, prompt, setPrompt, aspectRatio, setAspectRatio, onGenerate: generateImage, isLoading: loading, onGenerateIdeas: generateIdeas, isGeneratingIdeas, handleSuggestionClick, aiFocus, setAiFocus, imageAnalysis, isAnalyzing, posterHeadline, setPosterHeadline, mockupType, setMockupType, brandName, setBrandName, brandDescription, setBrandDescription, detectedBrandName, engine, openaiApiKey, cooldown }}
+                                {...{ mode, setMode, uploadedImages, handleFileChange, removeImage, prompt, setPrompt, aspectRatio, setAspectRatio, onGenerate: generateImage, isLoading: loading, onGenerateIdeas: generateIdeas, isGeneratingIdeas, handleSuggestionClick, aiFocus, setAiFocus, imageAnalysis, isAnalyzing, posterHeadline, setPosterHeadline, mockupType, setMockupType, brandName, setBrandName, brandDescription, setBrandDescription, detectedBrandName, engine, openaiApiKey }}
                             />
                         </div>
                         <div className="w-full flex-grow">
