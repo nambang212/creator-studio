@@ -1,15 +1,5 @@
-[build]
-  functions = "netlify/functions"
-
-# Menggunakan sintaks wildcard yang benar untuk menerapkan pengaturan ke semua fungsi
-[functions."*"]
-  timeout = 26 # Waktu dalam detik
-
-[[plugins]]
-  package = "@netlify/plugin-functions-install-core"
-
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
+[functions]
+  node_bundler = "esbuild"
+  [functions."*"]
+    timeout = 26 # Menambah batas waktu eksekusi fungsi menjadi 26 detik
 
