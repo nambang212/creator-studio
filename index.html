@@ -158,9 +158,8 @@
             return str;
         };
         
-        // This function handles all communication with our Netlify server function
         const callApiProxy = async (apiUrl, payload) => {
-            const proxyUrl = '/.netlify/functions/gemini'; // The correct path to our secure function
+            const proxyUrl = '/.netlify/functions/gemini';
 
             try {
                 const response = await fetch(proxyUrl, {
@@ -169,7 +168,6 @@
                     body: JSON.stringify({ apiUrl, payload })
                 });
 
-                // Read the response body ONCE to avoid "body stream already read" error
                 const responseText = await response.text();
                 
                 if (!response.ok) {
@@ -177,19 +175,16 @@
                     try { 
                         errorData = JSON.parse(responseText);
                     } catch (e) {
-                        // If parsing fails, it might be a server error (like timeout HTML page)
                         throw new Error(responseText || `Server Error: ${response.status}`);
                     }
-                    // Re-throw the error from Google AI or our own server function
                     throw new Error(errorData.error?.message || errorData.error || 'Unknown server error');
                 }
                 
-                // If the response was OK, parse the text as JSON
                 return JSON.parse(responseText);
 
             } catch (error) {
                 console.error("Error in callApiProxy:", error);
-                throw error; // Re-throw the error to be caught by the calling function
+                throw error;
             }
         };
         
@@ -400,12 +395,12 @@
             );
         };
 
-        const ControlPanel = ({ mode, setMode, uploadedImages, handleFileChange, removeImage, prompt, setPrompt, aspectRatio, setAspectRatio, onGenerate, isLoading, onGenerateIdeas, isGeneratingIdeas, handleSuggestionClick, aiFocus, setAiFocus, imageAnalysis, isAnalyzing, posterHeadline, setPosterHeadline, mockupType, setMockupType, brandName, setBrandName, brandDescription, setBrandDescription, detectedBrandName, engine, openaiApiKey }) => {
+        const ControlPanel = ({ mode, setMode, uploadedImages, handleFileChange, removeImage, prompt, setPrompt, aspectRatio, setAspectRatio, onGenerate, isLoading, onGenerateIdeas, isGeneratingIdeas, handleSuggestionClick, aiFocus, setAiFocus, imageAnalysis, isAnalyzing, posterHeadline, setPosterHeadline, mockupType, setMockupType, brandName, setBrandName, brandDescription, setBrandDescription, detectedBrandName, engine, openaiApiKey, cooldown }) => {
             const onDrop = useCallback(e => { e.preventDefault(); e.stopPropagation(); if (e.dataTransfer.files) handleFileChange(e.dataTransfer.files); }, [handleFileChange]);
             const onDragOver = useCallback(e => { e.preventDefault(); e.stopPropagation(); }, []);
             
             const getIsButtonDisabled = () => {
-                if (isLoading) return true;
+                if (isLoading || cooldown > 0) return true;
                 if (engine === 'dalle' && !openaiApiKey) return true;
                 switch (mode) {
                     case 'Foto Produk':
@@ -490,7 +485,7 @@
                                 </div>
                                 <div className="pt-4">
                                     <button onClick={onGenerate} disabled={isButtonDisabled} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg px-8 py-4 rounded-lg shadow-lg hover:scale-105 transform transition-transform duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 disabled:shadow-none hover:shadow-indigo-500/50">
-                                        {isLoading ? 'MEMPROSES...' : '✨ Wujudkan Sekarang'}
+                                        {isLoading ? 'MEMPROSES...' : (cooldown > 0 ? `Tunggu ${cooldown} detik...` : '✨ Wujudkan Sekarang')}
                                     </button>
                                 </div>
                             </>
@@ -551,7 +546,9 @@
                                      </div>
                                  </div>
                                 <div className="pt-4">
-                                    <button onClick={onGenerate} disabled={isButtonDisabled} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg px-8 py-4 rounded-lg">✨ Wujudkan Sekarang</button>
+                                    <button onClick={onGenerate} disabled={isButtonDisabled} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg px-8 py-4 rounded-lg">
+                                        {isLoading ? 'MEMPROSES...' : (cooldown > 0 ? `Tunggu ${cooldown} detik...` : '✨ Wujudkan Sekarang')}
+                                    </button>
                                 </div>
                             </div>
                         )}
@@ -616,7 +613,9 @@
                                      </div>
                                  </div>
                                 <div className="pt-4">
-                                     <button onClick={onGenerate} disabled={isButtonDisabled} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg px-8 py-4 rounded-lg shadow-lg hover:scale-105 transform transition-transform duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 disabled:shadow-none hover:shadow-indigo-500/50">✨ Wujudkan Sekarang</button>
+                                     <button onClick={onGenerate} disabled={isButtonDisabled} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg px-8 py-4 rounded-lg shadow-lg hover:scale-105 transform transition-transform duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 disabled:shadow-none hover:shadow-indigo-500/50">
+                                        {isLoading ? 'MEMPROSES...' : (cooldown > 0 ? `Tunggu ${cooldown} detik...` : '✨ Wujudkan Sekarang')}
+                                     </button>
                                 </div>
                             </div>
                         )}
@@ -651,6 +650,7 @@
             const [engine, setEngine] = useState('gemini');
             const [openaiApiKey, setOpenaiApiKey] = useState("");
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+            const [cooldown, setCooldown] = useState(0);
 
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [generatedIdeas, setGeneratedIdeas] = useState([]);
@@ -659,6 +659,13 @@
             useEffect(() => {
                 aiFocusRef.current = aiFocus;
             }, [aiFocus]);
+            
+            useEffect(() => {
+                if (cooldown > 0) {
+                    const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+                    return () => clearTimeout(timer);
+                }
+            }, [cooldown]);
 
             const analyzeBrandingOnImage = useCallback(async (images) => {
                 try {
@@ -670,7 +677,7 @@
                         generationConfig: { responseMimeType: "application/json", responseSchema: schema }
                     };
                     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`;
-                    const result = await callApiProxy(apiUrl, payload); // Use Proxy
+                    const result = await callApiProxy(apiUrl, payload);
                     const brandTextRaw = result?.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (brandTextRaw) {
                         const brandText = cleanJsonString(brandTextRaw);
@@ -697,7 +704,7 @@
                         generationConfig: { responseMimeType: "application/json", responseSchema: schema }
                     };
                     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`;
-                    const result = await callApiProxy(apiUrl, payload); // Use Proxy
+                    const result = await callApiProxy(apiUrl, payload);
                     const analysisTextRaw = result?.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (analysisTextRaw) {
                         const analysisText = cleanJsonString(analysisTextRaw);
@@ -803,7 +810,7 @@
                         generationConfig: { responseMimeType: "application/json", responseSchema: schema }
                     };
                     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`;
-                    const result = await callApiProxy(apiUrl, payload); // Use Proxy
+                    const result = await callApiProxy(apiUrl, payload);
                     const ideasTextRaw = result?.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (ideasTextRaw) {
                         const ideasText = cleanJsonString(ideasTextRaw);
@@ -841,7 +848,7 @@
                 };
                 
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent`;
-                const result = await callApiProxy(apiUrl, payload); // Use Proxy
+                const result = await callApiProxy(apiUrl, payload);
                 const base64ImageData = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
 
                 if (base64ImageData) {
@@ -877,7 +884,7 @@
             };
 
             const generateImage = async () => {
-                if (loading) return;
+                if (loading || cooldown > 0) return;
                 
                 const aspectRatioDescriptions = {'1:1': 'square (1:1)', '4:5': 'portrait (4:5)', '9:16': 'tall portrait (9:16) for Reels', '16:9': 'widescreen landscape (16:9)' };
                 const descriptiveAspectRatio = aspectRatioDescriptions[aspectRatio];
@@ -919,6 +926,7 @@
                          imageUrl = await generateWithDalle(finalPrompt, imageParts);
                     } else {
                          imageUrl = await generateWithGemini(finalPrompt, imageParts);
+                         setCooldown(60); // Start 60 second cooldown after a Gemini request
                     }
                     if (imageUrl) {
                         setOutputImage(imageUrl);
@@ -927,7 +935,10 @@
                 } catch (err) {
                     console.error("An error occurred during image generation:", err);
                     let userFriendlyError = err.message || "Terjadi kesalahan yang tidak diketahui.";
-                    if (err.message.includes("Billing hard limit")) {
+                    if (userFriendlyError.toLowerCase().includes('quota') || userFriendlyError.toLowerCase().includes('rate limit')) {
+                       userFriendlyError = "Batas penggunaan tercapai. Coba lagi nanti atau gunakan model DALL-E 3.";
+                    }
+                    else if (err.message.includes("Billing hard limit")) {
                         userFriendlyError = "Gagal: Batas tagihan OpenAI Anda telah tercapai.";
                     } else if (err.message.includes("Incorrect API key")) {
                         userFriendlyError = "Gagal: Kunci API OpenAI tidak valid.";
@@ -956,7 +967,7 @@
                     };
 
                     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent`;
-                    const result = await callApiProxy(apiUrl, payload); // Use Proxy
+                    const result = await callApiProxy(apiUrl, payload);
 
                     const finalRenderBase64 = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
 
@@ -991,7 +1002,7 @@
                     <main className="flex-grow container mx-auto p-4 md:p-8 flex flex-col lg:flex-row items-start gap-8">
                         <div className="w-full lg:w-[450px] flex-shrink-0 lg:sticky lg:top-8">
                             <ControlPanel 
-                                {...{ mode, setMode, uploadedImages, handleFileChange, removeImage, prompt, setPrompt, aspectRatio, setAspectRatio, onGenerate: generateImage, isLoading: loading, onGenerateIdeas: generateIdeas, isGeneratingIdeas, handleSuggestionClick, aiFocus, setAiFocus, imageAnalysis, isAnalyzing, posterHeadline, setPosterHeadline, mockupType, setMockupType, brandName, setBrandName, brandDescription, setBrandDescription, detectedBrandName, engine, openaiApiKey }}
+                                {...{ mode, setMode, uploadedImages, handleFileChange, removeImage, prompt, setPrompt, aspectRatio, setAspectRatio, onGenerate: generateImage, isLoading: loading, onGenerateIdeas: generateIdeas, isGeneratingIdeas, handleSuggestionClick, aiFocus, setAiFocus, imageAnalysis, isAnalyzing, posterHeadline, setPosterHeadline, mockupType, setMockupType, brandName, setBrandName, brandDescription, setBrandDescription, detectedBrandName, engine, openaiApiKey, cooldown }}
                             />
                         </div>
                         <div className="w-full flex-grow">
