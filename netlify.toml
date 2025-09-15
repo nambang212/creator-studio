@@ -1,12 +1,13 @@
-# Konfigurasi dasar untuk build
 [build]
   functions = "netlify/functions"
 
-# Menambahkan plugin untuk install dependensi functions secara otomatis
+# Menambahkan blok ini untuk meningkatkan batas waktu
+[functions]
+  timeout = 26 # Waktu dalam detik (maksimal untuk sinkron)
+
 [[plugins]]
   package = "@netlify/plugin-functions-install-core"
 
-# Aturan redirect agar request ke /api/gemini diteruskan ke function kita
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
