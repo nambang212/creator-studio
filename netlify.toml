@@ -1,20 +1,29 @@
+# Konfigurasi dasar untuk build
 [build]
-  command = "echo 'Build command goes here'"
+  # Perintah ini hanya placeholder, karena kita tidak memiliki proses build frontend yang rumit
+  command = "echo 'Build successful'"
+  # Folder yang akan di-publish adalah folder utama
   publish = "/"
 
+# Konfigurasi untuk Netlify Functions
 [functions]
+  # Menentukan di mana Netlify harus mencari folder functions kita
   directory = "netlify/functions/"
-  # Perpanjang batas waktu eksekusi fungsi menjadi 26 detik
-  # (batas maksimal untuk paket gratis)
-  timeout = 26 
+  # Perpanjang batas waktu eksekusi fungsi menjadi 26 detik (maksimal untuk paket gratis)
+  timeout = 26
 
+# Konfigurasi untuk Plugin
 [[plugins]]
   # Plugin ini akan secara otomatis meng-install dependensi 
   # yang ada di package.json di dalam folder functions
   package = "@netlify/plugin-functions-install-core"
 
+# Konfigurasi untuk Pengalihan (Redirects)
 [[redirects]]
+  # Semua permintaan yang masuk ke /api/...
   from = "/api/*"
+  # Akan dialihkan ke Netlify Function yang sesuai
   to = "/.netlify/functions/:splat"
+  # Status 200 berarti ini adalah rewrite (pengalihan di server), bukan redirect (301)
   status = 200
 
