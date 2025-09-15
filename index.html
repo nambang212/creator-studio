@@ -65,7 +65,7 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         
         .spinner { width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; display: inline-block; animation: spin 1s linear infinite; }
-    
+        
         /* Modal Styles */
         .modal-overlay {
             position: fixed;
@@ -180,6 +180,16 @@
                 }
             }
         };
+
+        // --- All API calls to Gemini will go through this proxy function ---
+        const callApiProxy = async (apiUrl, payload, onRetry) => {
+            const proxyUrl = '/.netlify/functions/gemini'; // This is our Netlify function endpoint
+            return await fetchWithExponentialBackoff(proxyUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ apiUrl, payload })
+            }, onRetry);
+        };
         
         const Header = ({ onSettingsClick }) => (
             <header className="relative text-center py-8 px-4">
@@ -215,19 +225,19 @@
                         <div>
                              <h3 className="font-semibold mb-2 text-slate-200 text-sm">Pilih Model AI</h3>
                              <div className="grid grid-cols-2 gap-2">
-                                <button onClick={() => setEngine('gemini')} data-state={engine === 'gemini' ? 'active' : ''} className="engine-btn p-2 bg-slate-800 border-2 border-slate-700 rounded-lg font-medium text-xs">Gemini (Cepat)</button>
-                                <button onClick={() => setEngine('dalle')} data-state={engine === 'dalle' ? 'active' : ''} className="engine-btn p-2 bg-slate-800 border-2 border-slate-700 rounded-lg font-medium text-xs">DALL-E 3 (HD)</button>
+                                 <button onClick={() => setEngine('gemini')} data-state={engine === 'gemini' ? 'active' : ''} className="engine-btn p-2 bg-slate-800 border-2 border-slate-700 rounded-lg font-medium text-xs">Gemini (Cepat)</button>
+                                 <button onClick={() => setEngine('dalle')} data-state={engine === 'dalle' ? 'active' : ''} className="engine-btn p-2 bg-slate-800 border-2 border-slate-700 rounded-lg font-medium text-xs">DALL-E 3 (HD)</button>
                             </div>
                         </div>
                         {engine === 'dalle' && (
                              <div>
                                  <h3 className="font-semibold mb-2 text-slate-200 text-sm">Kunci API OpenAI</h3>
                                  <input 
-                                    type="password"
-                                    value={apiKey}
-                                    onChange={(e) => setApiKey(e.target.value)}
-                                    placeholder="sk-..."
-                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm"
+                                     type="password"
+                                     value={apiKey}
+                                     onChange={(e) => setApiKey(e.target.value)}
+                                     placeholder="sk-..."
+                                     className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm"
                                  />
                                  <p className="text-xs text-slate-500 mt-1">Kunci Anda disimpan di browser & tidak pernah dikirim ke server kami.</p>
                              </div>
@@ -339,37 +349,37 @@
                             {ideas.map((idea, index) => (
                                 <div key={index} className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
                                      { (mode === 'Foto Produk' || mode === 'Poster / Desain') && (
-                                        <div className="mb-3">
-                                            {idea.usesModel ? (
-                                                <span className="text-xs bg-purple-600 text-white px-3 py-1 rounded-full font-semibold flex items-center gap-1 w-fit">
-                                                    <ion-icon name="person-outline"></ion-icon>
-                                                    Pakai Model
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs bg-slate-600 text-slate-200 px-3 py-1 rounded-full font-semibold flex items-center gap-1 w-fit">
-                                                    <ion-icon name="camera-outline"></ion-icon>
-                                                    Gak Pake Model
-                                                </span>
-                                            )}
-                                        </div>
+                                         <div className="mb-3">
+                                             {idea.usesModel ? (
+                                                 <span className="text-xs bg-purple-600 text-white px-3 py-1 rounded-full font-semibold flex items-center gap-1 w-fit">
+                                                     <ion-icon name="person-outline"></ion-icon>
+                                                     Pakai Model
+                                                 </span>
+                                             ) : (
+                                                 <span className="text-xs bg-slate-600 text-slate-200 px-3 py-1 rounded-full font-semibold flex items-center gap-1 w-fit">
+                                                     <ion-icon name="camera-outline"></ion-icon>
+                                                     Gak Pake Model
+                                                 </span>
+                                             )}
+                                         </div>
+                                      )}
+                                     { (mode === 'Poster / Desain' || mode === 'Mockup Packaging') && idea.gayaDesain ? (
+                                         <div className="space-y-2 text-sm">
+                                             <div><strong className="text-indigo-300">Gaya Desain:</strong> {idea.gayaDesain}</div>
+                                             <div><strong className="text-indigo-300">Visual Utama / Elemen:</strong> {idea.visualUtama || idea.elemenVisual}</div>
+                                             <div><strong className="text-indigo-300">Tipografi:</strong> {idea.tipografi}</div>
+                                             <div><strong className="text-indigo-300">Palet Warna:</strong> {idea.paletWarna}</div>
+                                         </div>
+                                     ) : (
+                                         <p className="text-slate-200 flex-1">{idea.idea}</p>
                                      )}
-                                    { (mode === 'Poster / Desain' || mode === 'Mockup Packaging') && idea.gayaDesain ? (
-                                        <div className="space-y-2 text-sm">
-                                            <div><strong className="text-indigo-300">Gaya Desain:</strong> {idea.gayaDesain}</div>
-                                            <div><strong className="text-indigo-300">Visual Utama / Elemen:</strong> {idea.visualUtama || idea.elemenVisual}</div>
-                                            <div><strong className="text-indigo-300">Tipografi:</strong> {idea.tipografi}</div>
-                                            <div><strong className="text-indigo-300">Palet Warna:</strong> {idea.paletWarna}</div>
-                                        </div>
-                                    ) : (
-                                        <p className="text-slate-200 flex-1">{idea.idea}</p>
-                                    )}
                                     <button onClick={() => onUseIdea(idea)} className="w-full mt-4 text-center bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-500 transition-colors">Pakai Konsep Ini</button>
                                 </div>
                             ))}
                         </div>
                         <div className="p-6 border-t border-slate-700">
                              <button onClick={onGenerateMore} disabled={isGenerating} className="w-full bg-slate-700 text-slate-200 font-bold py-3 px-4 rounded-lg hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-wait">
-                                {isGenerating ? <span className="spinner mx-auto"></span> : "Buat Ide Lainnya Dong"}
+                                 {isGenerating ? <span className="spinner mx-auto"></span> : "Buat Ide Lainnya Dong"}
                              </button>
                         </div>
                     </div>
@@ -503,18 +513,18 @@
                                     </label>
                                      <input id="file-upload-poster" type="file" className="sr-only" accept="image/*" multiple onChange={e => handleFileChange(e.target.files)} />
                                      {uploadedImages.length > 0 && (
-                                        <div className="mt-4">
-                                             <h3 className="font-semibold text-slate-200 mb-2 flex items-center gap-2">Fokus AI {isAnalyzing && <span className="spinner"></span>}</h3>
-                                            <div className="grid grid-cols-3 gap-2">
-                                                <button onClick={() => setAiFocus('kemasan')} data-state={aiFocus === 'kemasan' ? 'active' : ''} disabled={isAnalyzing || !imageAnalysis.hasPackaging} className="mode-btn p-2 text-xs bg-slate-800 border-2 border-slate-700 rounded-lg font-medium">Kemasan</button>
-                                                <button onClick={() => setAiFocus('produk')} data-state={aiFocus === 'produk' ? 'active' : ''} disabled={isAnalyzing || !imageAnalysis.hasRawProduct} className="mode-btn p-2 text-xs bg-slate-800 border-2 border-slate-700 rounded-lg font-medium">Isi Produk</button>
-                                                <button onClick={() => setAiFocus('keduanya')} data-state={aiFocus === 'keduanya' ? 'active' : ''} disabled={isAnalyzing || !imageAnalysis.hasPackaging || !imageAnalysis.hasRawProduct} className="mode-btn p-2 text-xs bg-slate-800 border-2 border-slate-700 rounded-lg font-medium">Kemasan & Isi</button>
-                                            </div>
-                                            {isAnalyzing && (<p className="text-xs text-slate-400 mt-2 text-center">Mohon tunggu, AI sedang menganalisis aset...</p>)}
-                                            {!isAnalyzing && !imageAnalysis.hasPackaging && (aiFocus === 'kemasan' || aiFocus === 'keduanya') && <p className="text-xs text-amber-400 mt-2">Opsi ini butuh foto referensi yang menyertakan kemasan.</p>}
-                                            {!isAnalyzing && !imageAnalysis.hasRawProduct && (aiFocus === 'produk' || aiFocus === 'keduanya') && <p className="text-xs text-amber-400 mt-2">Opsi ini butuh foto referensi yang menampilkan isi produk.</p>}
-                                        </div>
-                                    )}
+                                         <div className="mt-4">
+                                              <h3 className="font-semibold text-slate-200 mb-2 flex items-center gap-2">Fokus AI {isAnalyzing && <span className="spinner"></span>}</h3>
+                                             <div className="grid grid-cols-3 gap-2">
+                                                 <button onClick={() => setAiFocus('kemasan')} data-state={aiFocus === 'kemasan' ? 'active' : ''} disabled={isAnalyzing || !imageAnalysis.hasPackaging} className="mode-btn p-2 text-xs bg-slate-800 border-2 border-slate-700 rounded-lg font-medium">Kemasan</button>
+                                                 <button onClick={() => setAiFocus('produk')} data-state={aiFocus === 'produk' ? 'active' : ''} disabled={isAnalyzing || !imageAnalysis.hasRawProduct} className="mode-btn p-2 text-xs bg-slate-800 border-2 border-slate-700 rounded-lg font-medium">Isi Produk</button>
+                                                 <button onClick={() => setAiFocus('keduanya')} data-state={aiFocus === 'keduanya' ? 'active' : ''} disabled={isAnalyzing || !imageAnalysis.hasPackaging || !imageAnalysis.hasRawProduct} className="mode-btn p-2 text-xs bg-slate-800 border-2 border-slate-700 rounded-lg font-medium">Kemasan & Isi</button>
+                                             </div>
+                                             {isAnalyzing && (<p className="text-xs text-slate-400 mt-2 text-center">Mohon tunggu, AI sedang menganalisis aset...</p>)}
+                                             {!isAnalyzing && !imageAnalysis.hasPackaging && (aiFocus === 'kemasan' || aiFocus === 'keduanya') && <p className="text-xs text-amber-400 mt-2">Opsi ini butuh foto referensi yang menyertakan kemasan.</p>}
+                                             {!isAnalyzing && !imageAnalysis.hasRawProduct && (aiFocus === 'produk' || aiFocus === 'keduanya') && <p className="text-xs text-amber-400 mt-2">Opsi ini butuh foto referensi yang menampilkan isi produk.</p>}
+                                         </div>
+                                     )}
                                 </div>
                                 <div>
                                     <div className="flex justify-between items-center mb-2">
@@ -530,15 +540,15 @@
                                     </div>
                                 </div>
                                  <div>
-                                    <h2 className="font-semibold text-slate-200 mb-2">4. Teks Utama (Headline)</h2>
+                                     <h2 className="font-semibold text-slate-200 mb-2">4. Teks Utama (Headline)</h2>
                                      <input type="text" value={posterHeadline} onChange={e => setPosterHeadline(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3" placeholder="Contoh: 'Diskon 50%'" />
-                                </div>
+                                 </div>
                                  <div>
-                                    <h2 className="font-semibold mb-3 text-slate-200">5. Pilih Rasio Aspek</h2>
-                                    <div className="grid grid-cols-4 gap-3">
-                                        {['1:1', '4:5', '9:16', '16:9'].map(ratio => (<AspectRatioButton key={ratio} ratio={ratio} activeRatio={aspectRatio} onClick={setAspectRatio} />))}
-                                    </div>
-                                </div>
+                                     <h2 className="font-semibold mb-3 text-slate-200">5. Pilih Rasio Aspek</h2>
+                                     <div className="grid grid-cols-4 gap-3">
+                                         {['1:1', '4:5', '9:16', '16:9'].map(ratio => (<AspectRatioButton key={ratio} ratio={ratio} activeRatio={aspectRatio} onClick={setAspectRatio} />))}
+                                     </div>
+                                 </div>
                                 <div className="pt-4">
                                     <button onClick={onGenerate} disabled={isButtonDisabled} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg px-8 py-4 rounded-lg">✨ Wujudkan Sekarang</button>
                                 </div>
@@ -559,7 +569,7 @@
                                         ))}
                                     </div>
                                      <label htmlFor="file-upload-mockup" onDrop={onDrop} onDragOver={onDragOver} className="relative flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-slate-600 rounded-lg cursor-pointer bg-slate-800/50 hover:bg-slate-800/80 transition-colors">
-                                        <div className="text-center text-slate-400"><ion-icon name="cloud-upload-outline" class="text-3xl"></ion-icon><p className="mt-1 text-sm">Klik atau seret foto produkmu</p></div>
+                                         <div className="text-center text-slate-400"><ion-icon name="cloud-upload-outline" class="text-3xl"></ion-icon><p className="mt-1 text-sm">Klik atau seret foto produkmu</p></div>
                                      </label>
                                      <input id="file-upload-mockup" type="file" className="sr-only" accept="image/*" multiple onChange={e => handleFileChange(e.target.files)} />
                                 </div>
@@ -592,18 +602,18 @@
                                     )}
                                 </div>
                                  <div>
-                                      <div className="flex justify-between items-center mb-2">
-                                        <h2 className="font-semibold text-slate-200">5. Deskripsi Produk <span className="text-slate-400 font-normal">(Wajib)</span></h2>
-                                        {uploadedImages.length > 0 &&
-                                            (<button onClick={() => onGenerateIdeas()} disabled={isGeneratingIdeas} className="flex items-center gap-2 text-sm bg-indigo-600 px-3 py-1 rounded-full font-semibold hover:bg-indigo-500 transition-colors disabled:bg-slate-500 disabled:cursor-not-allowed">
-                                                {isGeneratingIdeas ? <><span className="spinner"></span><span>Mencari...</span></> : <>✨ <span>Beri Ide</span></>}
-                                            </button>)}
-                                      </div>
+                                     <div className="flex justify-between items-center mb-2">
+                                         <h2 className="font-semibold text-slate-200">5. Deskripsi Produk <span className="text-slate-400 font-normal">(Wajib)</span></h2>
+                                         {uploadedImages.length > 0 &&
+                                             (<button onClick={() => onGenerateIdeas()} disabled={isGeneratingIdeas} className="flex items-center gap-2 text-sm bg-indigo-600 px-3 py-1 rounded-full font-semibold hover:bg-indigo-500 transition-colors disabled:bg-slate-500 disabled:cursor-not-allowed">
+                                                 {isGeneratingIdeas ? <><span className="spinner"></span><span>Mencari...</span></> : <>✨ <span>Beri Ide</span></>}
+                                             </button>)}
+                                     </div>
                                     <div className="relative w-full">
                                         <textarea value={brandDescription} onChange={e => setBrandDescription(e.target.value)} rows="3" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 pr-10 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors placeholder-slate-500" placeholder="Contoh: 'Keripik Talas Asin Gurih, target pasar anak muda, gaya desain ceria'"></textarea>
                                         {brandDescription && (<button onClick={() => setBrandDescription('')} className="absolute top-3 right-3 text-slate-400 hover:text-white transition-colors" aria-label="Clear text"><ion-icon name="close-circle-outline" class="text-xl"></ion-icon></button>)}
                                      </div>
-                                </div>
+                                 </div>
                                 <div className="pt-4">
                                      <button onClick={onGenerate} disabled={isButtonDisabled} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-lg px-8 py-4 rounded-lg shadow-lg hover:scale-105 transform transition-transform duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 disabled:shadow-none hover:shadow-indigo-500/50">✨ Wujudkan Sekarang</button>
                                 </div>
@@ -658,9 +668,8 @@
                         contents: [{ parts: [{ text: analysisPrompt }, ...imageParts] }],
                         generationConfig: { responseMimeType: "application/json", responseSchema: schema }
                     };
-                    const apiKey = "";
-                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-                    const response = await fetchWithExponentialBackoff(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`;
+                    const response = await callApiProxy(apiUrl, payload); // UPDATED
                     if (!response.ok) throw new Error("Gagal menganalisis brand.");
                     const result = await response.json();
                     const brandTextRaw = result?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -692,9 +701,8 @@
                         contents: [{ parts: [{ text: analysisPrompt }, ...imageParts] }],
                         generationConfig: { responseMimeType: "application/json", responseSchema: schema }
                     };
-                    const apiKey = "";
-                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-                    const response = await fetchWithExponentialBackoff(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`;
+                    const response = await callApiProxy(apiUrl, payload); // UPDATED
                     if (!response.ok) throw new Error("Gagal menganalisis gambar.");
                     const result = await response.json();
                     const analysisTextRaw = result?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -804,7 +812,7 @@
                     
                     let schema;
                     if (mode === 'Mockup Packaging' || mode === 'Poster / Desain'){
-                       schema = { type: "ARRAY", items: { type: "OBJECT", properties: { gayaDesain: { type: "STRING" }, elemenVisual: { type: "STRING" }, tipografi: { type: "STRING" }, paletWarna: { type: "STRING" }, usesModel: {type: "BOOLEAN"}}, required: ["gayaDesain", "elemenVisual", "tipografi", "paletWarna", "usesModel"]}};
+                        schema = { type: "ARRAY", items: { type: "OBJECT", properties: { gayaDesain: { type: "STRING" }, elemenVisual: { type: "STRING" }, tipografi: { type: "STRING" }, paletWarna: { type: "STRING" }, usesModel: {type: "BOOLEAN"}}, required: ["gayaDesain", "elemenVisual", "tipografi", "paletWarna", "usesModel"]}};
                     } else { // Foto Produk
                         schema = { type: "ARRAY", items: { type: "OBJECT", properties: { idea: { type: "STRING" }, usesModel: { type: "BOOLEAN" }}, required: ["idea", "usesModel"]}};
                     }
@@ -813,9 +821,8 @@
                         contents: [{ parts: [{ text: ideaPrompt }, ...imageParts] }],
                         generationConfig: { responseMimeType: "application/json", responseSchema: schema }
                     };
-                     const apiKey = "";
-                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-                    const response = await fetchWithExponentialBackoff(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`;
+                    const response = await callApiProxy(apiUrl, payload); // UPDATED
                     if (!response.ok) throw new Error("Gagal mendapatkan ide dari AI.");
                     const result = await response.json();
                     const ideasTextRaw = result?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -836,10 +843,10 @@
             const handleUseIdea = (idea) => {
                 if (idea.gayaDesain) {
                      if(mode === 'Mockup Packaging'){
-                        setBrandDescription(`Gaya Desain: ${idea.gayaDesain}. Elemen Visual: ${idea.elemenVisual}. Tipografi: ${idea.tipografi}. Palet Warna: ${idea.paletWarna}.`);
-                    } else { // Poster
-                        setPrompt(`Sebuah poster dengan gaya ${idea.gayaDesain}. Visual utamanya adalah ${idea.visualUtama}. Tata letaknya seimbang dengan tipografi ${idea.tipografi} dan palet warna ${idea.paletWarna}.`);
-                    }
+                         setBrandDescription(`Gaya Desain: ${idea.gayaDesain}. Elemen Visual: ${idea.elemenVisual}. Tipografi: ${idea.tipografi}. Palet Warna: ${idea.paletWarna}.`);
+                     } else { // Poster
+                         setPrompt(`Sebuah poster dengan gaya ${idea.gayaDesain}. Visual utamanya adalah ${idea.visualUtama}. Tata letaknya seimbang dengan tipografi ${idea.tipografi} dan palet warna ${idea.paletWarna}.`);
+                     }
                 } else {
                     setPrompt(idea.idea);
                 }
@@ -860,14 +867,13 @@ All other text in the user prompt is a creative guideline to be executed *within
                     systemInstruction: { parts: [{ text: systemInstruction }] },
                     generationConfig: { responseModalities: ['IMAGE'] } 
                 };
-                const apiKey = "";
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
                 const onRetry = (delay) => {
                     const seconds = Math.round(delay / 1000);
                     setQueueMessage(`Server sibuk. Anda berada dalam antrean. Mencoba lagi dalam ${seconds} detik...`);
                 };
                 
-                const response = await fetchWithExponentialBackoff(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }, onRetry);
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent`;
+                const response = await callApiProxy(apiUrl, payload, onRetry); // UPDATED
                 
                 if (!response.ok) {
                     let errorMsg;
@@ -944,21 +950,21 @@ All other text in the user prompt is a creative guideline to be executed *within
                 if (mode === 'Poster / Desain') {
                     creativeBrief = `Creative brief for a poster: "${prompt}". Headline Text: "${posterHeadline}".`;
                      if (uploadedImages.length > 0) {
-                        switch (aiFocus) {
-                            case 'produk': creativeBrief += " Arahan tambahan: Fokus HANYA pada isi produk atau subjek utamanya, dan abaikan semua bentuk kemasan."; break;
-                            case 'keduanya': creativeBrief += " Arahan tambahan PENTING: Tampilkan kemasan produk DAN juga isi produknya secara bersamaan dalam satu adegan yang artistik dan realistis."; break;
-                            case 'kemasan': default: creativeBrief += " Arahan tambahan: Fokus HANYA pada kemasan produk. Jangan tampilkan isi produknya secara terpisah."; break;
-                        }
-                    }
+                         switch (aiFocus) {
+                             case 'produk': creativeBrief += " Arahan tambahan: Fokus HANYA pada isi produk atau subjek utamanya, dan abaikan semua bentuk kemasan."; break;
+                             case 'keduanya': creativeBrief += " Arahan tambahan PENTING: Tampilkan kemasan produk DAN juga isi produknya secara bersamaan dalam satu adegan yang artistik dan realistis."; break;
+                             case 'kemasan': default: creativeBrief += " Arahan tambahan: Fokus HANYA pada kemasan produk. Jangan tampilkan isi produknya secara terpisah."; break;
+                         }
+                     }
                 } else if (mode === 'Mockup Packaging') {
                     creativeBrief = `Creative brief for a packaging mockup: Brand Name: "${brandName}". Design a '${mockupType}' packaging for this product based on the description: "${brandDescription}".`;
                 } else { // Foto Produk
                     creativeBrief = `Creative brief: "${prompt}".`;
                      switch (aiFocus) {
-                        case 'produk': creativeBrief += " Arahan tambahan: Fokus HANYA pada isi produk atau subjek utamanya, dan abaikan semua bentuk kemasan."; break;
-                        case 'keduanya': creativeBrief += " Arahan tambahan PENTING: Tampilkan kemasan produk DAN juga isi produknya secara bersamaan dalam satu adegan yang artistik dan realistis."; break;
-                        case 'kemasan': default: creativeBrief += " Arahan tambahan: Fokus HANYA pada kemasan produk. Jangan tampilkan isi produknya secara terpisah."; break;
-                    }
+                         case 'produk': creativeBrief += " Arahan tambahan: Fokus HANYA pada isi produk atau subjek utamanya, dan abaikan semua bentuk kemasan."; break;
+                         case 'keduanya': creativeBrief += " Arahan tambahan PENTING: Tampilkan kemasan produk DAN juga isi produknya secara bersamaan dalam satu adegan yang artistik dan realistis."; break;
+                         case 'kemasan': default: creativeBrief += " Arahan tambahan: Fokus HANYA pada kemasan produk. Jangan tampilkan isi produknya secara terpisah."; break;
+                     }
                 }
 
                 const finalPrompt = `**[LAW 1: ASPECT RATIO] The final image MUST BE ${descriptiveAspectRatio}.**\n\n${creativeBrief}`;
@@ -1015,9 +1021,8 @@ All other text in the user prompt is a creative guideline to be executed *within
                         generationConfig: { responseModalities: ['IMAGE'] }
                     };
 
-                    const apiKey = "";
-                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
-                    const response = await fetchWithExponentialBackoff(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent`;
+                    const response = await callApiProxy(apiUrl, payload); // UPDATED
 
                     if (!response.ok) {
                         throw new Error("Gagal melakukan Final Render.");
